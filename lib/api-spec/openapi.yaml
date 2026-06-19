@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: DocMind AI API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: documents
+    description: Document upload and summarization
+  - name: summaries
+    description: Summary history and management
 paths:
   /healthz:
     get:
@@ -24,6 +28,126 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /documents/upload:
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload and summarize a document
+      description: Accepts a PDF or DOCX file, extracts text, and generates an AI summary with key points and action items
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DocumentUpload"
+      responses:
+        "201":
+          description: Document processed and summary created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Summary"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /summaries:
+    get:
+      operationId: listSummaries
+      tags: [summaries]
+      summary: List all document summaries
+      description: Returns all summaries ordered by most recent first
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter summaries by file name or summary content
+        - name: fileType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by file type (pdf, docx)
+      responses:
+        "200":
+          description: List of summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Summary"
+
+  /summaries/stats:
+    get:
+      operationId: getSummaryStats
+      tags: [summaries]
+      summary: Get summary statistics
+      description: Returns aggregate stats about processed documents
+      responses:
+        "200":
+          description: Statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryStats"
+
+  /summaries/{id}:
+    get:
+      operationId: getSummary
+      tags: [summaries]
+      summary: Get a single summary by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Summary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSummary
+      tags: [summaries]
+      summary: Delete a summary
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted successfully
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +158,72 @@ components:
       required:
         - status
 
+    DocumentUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          description: PDF or DOCX file (multipart upload)
+
+    Summary:
+      type: object
+      required: [id, fileName, fileType, fileSize, status, createdAt]
+      properties:
+        id:
+          type: integer
+        fileName:
+          type: string
+        fileType:
+          type: string
+          description: "pdf or docx"
+        fileSize:
+          type: integer
+          description: File size in bytes
+        status:
+          type: string
+          description: "processing | completed | failed"
+        summary:
+          type: ["string", "null"]
+          description: AI-generated summary paragraph
+        keyPoints:
+          type: ["string", "null"]
+          description: JSON array of key points as a string
+        actionItems:
+          type: ["string", "null"]
+          description: JSON array of action items as a string
+        wordCount:
+          type: ["integer", "null"]
+          description: Word count of extracted text
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SummaryStats:
+      type: object
+      required: [totalDocuments, completedDocuments, failedDocuments, totalWordsProcessed, pdfCount, docxCount]
+      properties:
+        totalDocuments:
+          type: integer
+        completedDocuments:
+          type: integer
+        failedDocuments:
+          type: integer
+        totalWordsProcessed:
+          type: integer
+        pdfCount:
+          type: integer
+        docxCount:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
